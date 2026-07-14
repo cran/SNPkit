@@ -4,7 +4,14 @@
 \alias{runAnticlusteringPCA}
 \title{Run PCA and anticlustering on SNPDataLong}
 \usage{
-runAnticlusteringPCA(object, K = 2, n_pcs = 20, center = TRUE, scale = TRUE)
+runAnticlusteringPCA(
+  object,
+  K = 2,
+  n_pcs = 20,
+  center = TRUE,
+  scale = TRUE,
+  anticlust_method = c("exchange", "fast")
+)
 }
 \arguments{
 \item{object}{An object of class \code{SNPDataLong}.}
@@ -12,29 +19,34 @@ runAnticlusteringPCA(object, K = 2, n_pcs = 20, center = TRUE, scale = TRUE)
 \item{K}{Number of groups for anticlustering, or a vector of group sizes
 (as in \pkg{anticlust}).}
 
-\item{n_pcs}{Number of top principal components to use. If \code{< 1},
-it is interpreted as the proportion of variance to be explained (e.g.,
-\code{0.8} means PCs explaining at least 80\% variance).}
+\item{n_pcs}{Number of top principal components to use. If \code{< 1}, it is
+interpreted as the proportion of variance to be explained (e.g. \code{0.8}).
+The fast matrix-free PCA path is used when a fixed number (\code{>= 1}) is
+requested and \pkg{RSpectra} is installed.}
 
-\item{center}{Logical or numeric. Passed to \code{\link[base]{scale}} via
-\code{genoToDF}. If \code{TRUE}, center columns; if numeric, a vector of
-column means. Default: \code{TRUE}.}
+\item{center}{Logical or numeric, passed to \code{\link{runPCA}}. Default
+\code{TRUE}.}
 
-\item{scale}{Logical or numeric. Passed to \code{\link[base]{scale}} via
-\code{genoToDF}. If \code{TRUE}, scale to unit variance; if numeric,
-a vector of column sds. Default: \code{TRUE}.}
+\item{scale}{Logical or numeric, passed to \code{\link{runPCA}}. Default
+\code{TRUE}.}
+
+\item{anticlust_method}{Which \pkg{anticlust} optimiser to use.
+\code{"exchange"} (default) calls \code{anticlust::anticlustering};
+\code{"fast"} calls \code{anticlust::fast_anticlustering}, which scales to
+large numbers of individuals and may return different assignments.}
 }
 \value{
 A list with components:
 \describe{
   \item{groups}{Integer vector with anticlustering group assignments.}
-  \item{pca}{The PCA result object (from \code{stats::prcomp}).}
+  \item{pca}{The PCA result object (a \code{prcomp}-like list), as returned
+    by \code{\link{runPCA}}.}
   \item{pcs}{Numeric matrix of the PCs used for anticlustering.}
 }
 }
 \description{
-Converts a SNPDataLong object to a data.frame, runs PCA, and performs
-anticlustering on the selected principal components.
+Runs PCA on a \code{SNPDataLong} object (via \code{\link{runPCA}}) and then
+performs anticlustering on the selected principal components.
 }
 \examples{
 \dontshow{if (requireNamespace("anticlust", quietly = TRUE) && exists("nelore_imputed")) withAutoprint(\{ # examplesIf}

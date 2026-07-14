@@ -415,7 +415,7 @@ write to the user’s home filespace.</p>
 <span id="cb2-45"><a href="#cb2-45" tabindex="-1"></a><span class="co">#&gt; 10 snp10          1       10</span></span>
 <span id="cb2-46"><a href="#cb2-46" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb2-47"><a href="#cb2-47" tabindex="-1"></a><span class="co">#&gt; Slot &quot;path&quot;:</span></span>
-<span id="cb2-48"><a href="#cb2-48" tabindex="-1"></a><span class="co">#&gt; [1] &quot;/var/folders/gg/p6chdt1j0vsfdxppxd7lkvm00000gn/T//RtmpUDYrQc/filef0ca2f4aab22&quot;</span></span>
+<span id="cb2-48"><a href="#cb2-48" tabindex="-1"></a><span class="co">#&gt; [1] &quot;/var/folders/gg/p6chdt1j0vsfdxppxd7lkvm00000gn/T//RtmpL5eokq/file108602ff356d1&quot;</span></span>
 <span id="cb2-49"><a href="#cb2-49" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb2-50"><a href="#cb2-50" tabindex="-1"></a><span class="co">#&gt; Slot &quot;xref_path&quot;:</span></span>
 <span id="cb2-51"><a href="#cb2-51" tabindex="-1"></a><span class="co">#&gt; [1] &quot;chip1&quot;</span></span></code></pre></div>
@@ -496,7 +496,7 @@ report of removed SNPs (<code>&quot;report&quot;</code>), a filtered
 <span id="cb4-37"><a href="#cb4-37" tabindex="-1"></a><span class="co">#&gt; 10 snp10          1       10</span></span>
 <span id="cb4-38"><a href="#cb4-38" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb4-39"><a href="#cb4-39" tabindex="-1"></a><span class="co">#&gt; Slot &quot;path&quot;:</span></span>
-<span id="cb4-40"><a href="#cb4-40" tabindex="-1"></a><span class="co">#&gt; [1] &quot;/var/folders/gg/p6chdt1j0vsfdxppxd7lkvm00000gn/T//RtmpUDYrQc/filef0ca2f4aab22&quot;</span></span>
+<span id="cb4-40"><a href="#cb4-40" tabindex="-1"></a><span class="co">#&gt; [1] &quot;/var/folders/gg/p6chdt1j0vsfdxppxd7lkvm00000gn/T//RtmpL5eokq/file108602ff356d1&quot;</span></span>
 <span id="cb4-41"><a href="#cb4-41" tabindex="-1"></a><span class="co">#&gt; </span></span>
 <span id="cb4-42"><a href="#cb4-42" tabindex="-1"></a><span class="co">#&gt; Slot &quot;xref_path&quot;:</span></span>
 <span id="cb4-43"><a href="#cb4-43" tabindex="-1"></a><span class="co">#&gt; [1] &quot;chip1&quot;</span></span></code></pre></div>
@@ -523,9 +523,9 @@ to a user-supplied directory. For this vignette we use
 <span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a><span class="co">#&gt; Writing .ped file in chunks...</span></span>
 <span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a><span class="co">#&gt;  Wrote individuals 1 to 5</span></span>
 <span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a><span class="co">#&gt;  Wrote individuals 6 to 10</span></span>
-<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a><span class="co">#&gt; .ped file written: /var/folders/gg/p6chdt1j0vsfdxppxd7lkvm00000gn/T//RtmpUDYrQc/snpkit_demo/demo.ped</span></span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a><span class="co">#&gt; .ped file written: /var/folders/gg/p6chdt1j0vsfdxppxd7lkvm00000gn/T//RtmpL5eokq/snpkit_demo/demo.ped</span></span>
 <span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a><span class="co">#&gt; Writing .map file...</span></span>
-<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a><span class="co">#&gt; .map file written: /var/folders/gg/p6chdt1j0vsfdxppxd7lkvm00000gn/T//RtmpUDYrQc/snpkit_demo/demo.map</span></span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a><span class="co">#&gt; .map file written: /var/folders/gg/p6chdt1j0vsfdxppxd7lkvm00000gn/T//RtmpL5eokq/snpkit_demo/demo.map</span></span>
 <span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a><span class="co">#&gt; Skipping PLINK binary conversion as requested.</span></span>
 <span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a><span class="co">#&gt; All done.</span></span>
 <span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a><span class="fu">list.files</span>(out_dir, <span class="at">pattern =</span> <span class="st">&quot;demo&quot;</span>)</span>
@@ -534,10 +534,11 @@ to a user-supplied directory. For this vignette we use
 <div id="where-to-go-next" class="section level1">
 <h1>Where to go next</h1>
 <p>See <code>?qcSNPs</code>, <code>?savePlink</code>,
-<code>?saveFImpute</code>, and <code>?runAnticlusteringPCA</code> for
-details on the individual functions. Functions that wrap external
-software (FImpute, PLINK, ADMIXTURE) require the corresponding binary to
-be installed on the system.</p>
+<code>?saveFImpute</code>, <code>?runPCA</code>, and
+<code>?runAnticlusteringPCA</code> for details on the individual
+functions. Functions that wrap external software (FImpute, PLINK,
+ADMIXTURE) require the corresponding binary to be installed on the
+system.</p>
 </div>
 
 

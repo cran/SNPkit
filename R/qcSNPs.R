@@ -6,9 +6,7 @@
 #' and optionally removing SNPs at the same genomic position (keeping the one with highest MAF).
 #'
 #' @param x An object of class SNPDataLong.
-#' @param missing_ind Maximum allowed proportion of missing data per individual (currently not implemented).
-#' @param missing_snp Maximum allowed proportion of missing data per SNP (currently not implemented).
-#' @param min_snp_cr Minimum acceptable call rate for SNPs (e.g., 0.95). SNPs below this threshold are removed.
+#' @param min_snp_cr Minimum acceptable call rate for SNPs (e.g., 0.95). SNPs below this threshold are removed. For per-individual missingness use \code{qcSamples(smp_cr = ...)}.
 #' @param min_maf Minimum minor allele frequency allowed for SNPs (e.g., 0.05). SNPs with lower MAF are removed.
 #' @param hwe p-value threshold for Hardy-Weinberg equilibrium test (e.g., 1e-6). SNPs violating this are removed.
 #' @param snp_position Logical. If TRUE, removes SNPs mapped to the same position, retaining only the one with highest MAF.
@@ -52,8 +50,6 @@ setGeneric("qcSNPs", function(x, ...) standardGeneric("qcSNPs"))
 #' @rdname qcSNPs
 #' @export
 setMethod("qcSNPs", "SNPDataLong", function(x,
-                                            missing_ind = NULL,
-                                            missing_snp = NULL,
                                             min_snp_cr = NULL,
                                             min_maf = NULL,
                                             hwe = NULL,
@@ -114,7 +110,7 @@ setMethod("qcSNPs", "SNPDataLong", function(x,
   if (!is.null(snp_position) && snp_position) {
     # Force removal of SNPs with missing position before position filter
     if (is.null(no_position) || !no_position) {
-      no_pos_manual <- map$Name[is.na(map$Position)]
+      no_pos_manual <- check.snp.no.position(map)
       if (length(no_pos_manual) > 0) {
         warning("SNPs without position removed automatically before snp_position filter.")
         keep_snps <- setdiff(keep_snps, no_pos_manual)
@@ -129,7 +125,12 @@ setMethod("qcSNPs", "SNPDataLong", function(x,
     if (n > 0) {
       for (i in seq_len(n)) {
         snpsum1 <- snpsum[snp_same[[i]], , drop = FALSE]
-        snp.high.maf <- rownames(snpsum1[snpsum1[, "MAF"] == max(snpsum1[, "MAF"], na.rm = TRUE), , drop = FALSE])[1]
+        maf_vals <- snpsum1[, "MAF"]
+        if (all(is.na(maf_vals))) {
+          snp.high.maf <- rownames(snpsum1)[1]
+        } else {
+          snp.high.maf <- rownames(snpsum1[maf_vals == max(maf_vals, na.rm = TRUE), , drop = FALSE])[1]
+        }
         snpstoremove <- union(snpstoremove, setdiff(rownames(snpsum1), snp.high.maf))
       }
       keep_snps <- setdiff(keep_snps, snpstoremove)
@@ -197,55 +198,3 @@ setMethod("qcSNPs", "SNPDataLong", function(x,
     ))
   }
 })
-
-
-#' Check SNPs mapped to the same position
-#'
-#' Identifies groups of SNPs that are mapped to the exact same genomic position on each chromosome.
-#' Returns a list where each element corresponds to one group of overlapping SNPs.
-#'
-#' @param snpmap Data frame containing at least columns "Name", "Chromosome", and "Position".
-#'
-#' @return A list of character vectors, each with names of SNPs found at the same position.
-#'
-#' @export
-check.snp.same.position <- function(snpmap) {
-  chromo <- unique(snpmap[, "Chromosome"])
-  n <- length(chromo)
-  snps <- list()
-  k <- 1
-  for (i in seq_len(n)) {
-    message("Analyzing chromosome ", chromo[i])
-    snpmap.chr <- snpmap[snpmap[, "Chromosome"] == chromo[i], ]
-
-    snpmap.chr <- snpmap.chr[!is.na(snpmap.chr[, "Position"]), , drop = FALSE]
-
-    m <- nrow(snpmap.chr)
-    if (m < 2) {
-      next
-    }
-
-    sorted.snpmap.chr <- snpmap.chr[order(snpmap.chr[, "Position"]), ]
-
-    for (j in 1:(m - 1)) {
-      j1 <- j + 1
-      pos_j <- sorted.snpmap.chr[j, "Position"]
-      pos_j1 <- sorted.snpmap.chr[j1, "Position"]
-
-      # Check robusto
-      if (!is.na(pos_j) && !is.na(pos_j1) && pos_j == pos_j1) {
-        message("SNPs in same position: ", sorted.snpmap.chr[j, "Name"], " - ", sorted.snpmap.chr[j1, "Name"])
-        if (length(snps) < k) {
-          snps[[k]] <- c(as.character(sorted.snpmap.chr[j, "Name"]), as.character(sorted.snpmap.chr[j1, "Name"]))
-        } else {
-          snps[[k]] <- c(snps[[k]], as.character(sorted.snpmap.chr[j1, "Name"]))
-        }
-      } else {
-        if (length(snps) == k) {
-          k <- k + 1
-        }
-      }
-    }
-  }
-  return(snps)
-}

@@ -77,40 +77,56 @@ check.identical.samples <- function(genotypes, threshold = 0) {
     numeric_geno <- genotypes
   }
 
+  empty <- data.frame(Sample1 = character(),
+                      Sample2 = character(),
+                      Distance = numeric(),
+                      stringsAsFactors = FALSE)
+
+  n <- nrow(numeric_geno)
+  if (is.null(n) || n < 2) {
+    return(empty)
+  }
+
   mdistm <- as.matrix(stats::dist(numeric_geno))
   sample.names <- rownames(mdistm)
-  n <- length(sample.names)
 
-  sample.pairs <- data.frame(Sample1 = character(),
-                             Sample2 = character(),
-                             Distance = numeric(),
+  # Vectorized extraction of the upper-triangle pairs within threshold, ordered
+  # row-major (i < j) -- avoids the quadratic rbind-in-loop.
+  hits <- which(upper.tri(mdistm) & mdistm <= threshold, arr.ind = TRUE)
+  if (nrow(hits) == 0) {
+    return(empty)
+  }
+  hits <- hits[order(hits[, "row"], hits[, "col"]), , drop = FALSE]
+
+  sample.pairs <- data.frame(Sample1 = sample.names[hits[, "row"]],
+                             Sample2 = sample.names[hits[, "col"]],
+                             Distance = mdistm[hits],
                              stringsAsFactors = FALSE)
 
-  for (i in 1:(n - 1)) {
-    for (j in (i + 1):n) {
-      if (mdistm[i, j] <= threshold) {
-        warning(paste("Identical samples:", sample.names[i], "-", sample.names[j]))
-        sample.pairs <- rbind(sample.pairs,
-                              data.frame(Sample1 = sample.names[i],
-                                         Sample2 = sample.names[j],
-                                         Distance = mdistm[i, j],
-                                         stringsAsFactors = FALSE))
-      }
-    }
+  for (r in seq_len(nrow(sample.pairs))) {
+    warning(paste("Identical samples:", sample.pairs$Sample1[r],
+                  "-", sample.pairs$Sample2[r]))
   }
-  return(sample.pairs)
+  sample.pairs
 }
 
 
 #' Check identical samples by block
 #'
-#' Identifies identical samples within SNP blocks.
+#' Identifies sample pairs that stay identical (within \code{threshold}) across
+#' \emph{every} SNP block, scanning the markers in blocks of \code{blcsize}.
+#' Each block only re-checks the samples still in a confirmed pair, and pairs
+#' that separate in any block are dropped, so the result is the intersection of
+#' the per-block identical pairs.
 #'
-#' @param genotypes Genotype matrix.
+#' @param genotypes Genotype matrix (samples x SNPs) or SnpMatrix with sample
+#'   names as rownames.
 #' @param blcsize Block size (number of SNPs).
 #' @param threshold Distance threshold. Default 0.
 #'
-#' @return List of identical sample pairs.
+#' @return A data.frame of identical sample pairs (columns \code{Sample1},
+#'   \code{Sample2}, \code{Distance}); \code{Distance} is taken from the first
+#'   block. Empty data.frame if none.
 #'
 #' @examples
 #' set.seed(1)
@@ -120,30 +136,44 @@ check.identical.samples <- function(genotypes, threshold = 0) {
 #'
 #' @export
 check.identical.samples.by.block <- function(genotypes, blcsize, threshold = 0) {
-  pairs.c <- list()
-  n <- dim(genotypes)[2]
-  ini <- 1
-  fin <- min(blcsize, n)
-  genot.curr <- genotypes[, ini:fin]
-  while (ini <= n) {
-    message("Analyzing block ", ini, "-", fin)
-    pairs.c <- check.identical.samples(genot.curr, threshold)
-    if (is.data.frame(pairs.c) && nrow(pairs.c) > 0) {
-      m <- nrow(pairs.c)
-      notuniquesmps <- NULL
-      for (i in seq_len(m)) {
-        notuniquesmps <- union(notuniquesmps, as.character(pairs.c[i, 1:2]))
-      }
-      ini <- fin + 1
-      fin <- min(ini + blcsize - 1, n)
-      if (ini <= n) {
-        genot.curr <- genotypes[notuniquesmps, ini:fin, drop = FALSE]
-      }
-    } else {
-      break
-    }
+  empty <- data.frame(Sample1 = character(), Sample2 = character(),
+                      Distance = numeric(), stringsAsFactors = FALSE)
+  n_snp <- ncol(genotypes)
+  if (is.null(n_snp) || n_snp < 1 || nrow(genotypes) < 2) {
+    return(empty)
   }
-  return(pairs.c)
+
+  # Order-independent key so {A,B} and {B,A} match across blocks.
+  pair_ids <- function(df) {
+    if (nrow(df) == 0) return(character(0))
+    paste(pmin(df$Sample1, df$Sample2), pmax(df$Sample1, df$Sample2), sep = "\r")
+  }
+
+  confirmed <- NULL   # pairs identical in every block processed so far
+  ini <- 1
+  while (ini <= n_snp) {
+    fin <- min(ini + blcsize - 1, n_snp)
+    message("Analyzing block ", ini, "-", fin)
+
+    # Only samples still in a confirmed pair need re-checking.
+    rows <- if (is.null(confirmed)) rownames(genotypes)
+            else unique(c(confirmed$Sample1, confirmed$Sample2))
+    block <- suppressWarnings(
+      check.identical.samples(genotypes[rows, ini:fin, drop = FALSE], threshold)
+    )
+
+    if (is.null(confirmed)) {
+      confirmed <- block
+    } else {
+      confirmed <- confirmed[pair_ids(confirmed) %in% pair_ids(block), , drop = FALSE]
+    }
+    if (nrow(confirmed) == 0) {
+      return(empty)
+    }
+    ini <- fin + 1
+  }
+  rownames(confirmed) <- NULL
+  confirmed
 }
 
 #' Check Mendelian inconsistencies
@@ -166,17 +196,22 @@ check.identical.samples.by.block <- function(genotypes, blcsize, threshold = 0) 
 #'
 #' @export
 check.mendelian.inconsistencies <- function(genotypes, father, child) {
-  sample1 <- NULL
-  sample2 <- NULL
   m <- length(child)
   n <- length(father)
+  if (n == 0 || m == 0) {
+    return(data.frame(Father = character(), Child = character(),
+                      N = numeric(), Total = numeric(), Rate = numeric(),
+                      stringsAsFactors = FALSE))
+  }
+  sample1 <- NULL
+  sample2 <- NULL
   n.inconsist <- NULL
   t.inconsist <- NULL
   tx.inconsist <- NULL
-  for (i in 1:n) {
+  for (i in seq_len(n)) {
     g1 <- genotypes[father[i], ]
     nam1 <- father[i]
-    for (j in 1:m) {
+    for (j in seq_len(m)) {
       nam2 <- child[j]
       if (nam1 != nam2) {
         sample1 <- c(sample1, paste(nam1))
@@ -375,23 +410,30 @@ check.snp.monomorf <- function(snp.summary) {
 
 #' Check SNP no position
 #'
-#' Identifies SNPs with position equal to zero in the SNP map.
+#' Identifies SNPs without a usable genomic position, i.e. whose position is
+#' missing (`NA`), blank, non-numeric, or zero. The `Position` column may be
+#' numeric or character (`getGeno()` reads maps as character), so it is coerced
+#' to numeric first.
 #'
 #' @param snpmap Data frame with columns `Position` and `Name`.
 #'
 #' @return Character vector with SNP names without position. Returns `NULL` if none.
 #'
 #' @examples
-#' df <- data.frame(Position = c(0, 100), Name = c("SNP1", "SNP2"))
-#' check.snp.no.position(df)
+#' df <- data.frame(Position = c(0, 100, NA), Name = c("SNP1", "SNP2", "SNP3"))
+#' check.snp.no.position(df)  # SNP1 (zero) and SNP3 (missing)
 #'
 #' @export
 check.snp.no.position <- function(snpmap) {
-  snps <- snpmap[snpmap[, "Position"] == 0, "Name"]
+  # Coerce first so numeric and character maps behave the same; blank/non-numeric
+  # values become NA and count as "no position", as does an explicit zero.
+  pos_num <- suppressWarnings(as.numeric(snpmap[["Position"]]))
+  no_pos  <- is.na(pos_num) | pos_num == 0
+  snps <- as.character(snpmap[["Name"]])[no_pos]
   if (length(snps) == 0) {
-    snps <- NULL
+    return(NULL)
   }
-  return(as.character(snps))
+  snps
 }
 
 #' Check SNPs with same position
@@ -410,34 +452,18 @@ check.snp.no.position <- function(snpmap) {
 #'
 #' @export
 check.snp.same.position <- function(snpmap) {
-  chromo <- unique(snpmap[, "Chromosome"])
-  snps <- list()
-  k <- 1
-  for (chr in chromo) {
-    message("Analyzing chromosome ", chr)
-    snpmap.chr <- snpmap[snpmap[, "Chromosome"] == chr, ]
-    sorted.snpmap.chr <- snpmap.chr[order(snpmap.chr[, "Position"]), ]
-    m <- nrow(sorted.snpmap.chr)
-
-    for (j in 1:(m - 1)) {
-      j1 <- j + 1
-
-      if (isTRUE(sorted.snpmap.chr[j, "Position"] == sorted.snpmap.chr[j1, "Position"])) {
-        # message("SNPs in same position: ", sorted.snpmap.chr[j, "Name"], " - ", sorted.snpmap.chr[j1, "Name"])
-
-        if (length(snps) < k) {
-          snps[[k]] <- c(as.character(sorted.snpmap.chr[j, "Name"]), as.character(sorted.snpmap.chr[j1, "Name"]))
-        } else {
-          snps[[k]] <- c(snps[[k]], as.character(sorted.snpmap.chr[j1, "Name"]))
-        }
-      } else {
-        if (length(snps) == k) {
-          k <- k + 1
-        }
-      }
-    }
+  pos <- snpmap[["Position"]]
+  ok  <- !is.na(pos)
+  if (!any(ok)) {
+    return(list())
   }
-  return(snps)
+  # Group SNP names by chromosome + position; groups with more than one SNP
+  # share a locus. Vectorized and free of adjacency/index bookkeeping, so it is
+  # safe for single-SNP chromosomes and missing positions.
+  key    <- paste(snpmap[["Chromosome"]][ok], pos[ok], sep = ":")
+  snp_id <- as.character(snpmap[["Name"]])[ok]
+  groups <- split(snp_id, key)
+  unname(groups[lengths(groups) > 1])
 }
 
 
@@ -489,11 +515,13 @@ pairs2sets <- function(pairs) {
       toremove <- idx[1]
       sample.ident[[k]] <- as.character(sample.pairs[idx[1], ])
       pivot <- sample.ident[[k]]
-      for (i in 2:n) {
-        settest <- as.character(sample.pairs[idx[i], ])
-        if (length(intersect(pivot, settest)) > 0) {
-          pivot <- union(pivot, settest)
-          toremove <- c(toremove, idx[i])
+      if (n >= 2) {
+        for (i in 2:n) {
+          settest <- as.character(sample.pairs[idx[i], ])
+          if (length(intersect(pivot, settest)) > 0) {
+            pivot <- union(pivot, settest)
+            toremove <- c(toremove, idx[i])
+          }
         }
       }
       sample.ident[[k]] <- pivot
@@ -505,13 +533,19 @@ pairs2sets <- function(pairs) {
   }
 }
 
-#' Do genome relationship matrix PCA
+#' Do genome relationship matrix PCA (deprecated)
 #'
-#' Performs PCA using the genome relationship matrix (GRM).
+#' @description
+#' \strong{Deprecated}. Performs PCA using the genome relationship matrix (GRM)
+#' on a raw \code{SnpMatrix}. Use \code{\link{runPCA}} instead, which operates on
+#' a \code{SNPDataLong} object, standardises SNPs, and returns scores directly
+#' comparable to \code{\link{runAnticlusteringPCA}}.
 #'
 #' @param genotypes Genotype matrix.
 #'
 #' @return List containing `pcs` (principal components) and `eigen` (eigenvalues).
+#'
+#' @seealso \code{\link{runPCA}}
 #'
 #' @examples
 #' \donttest{
@@ -520,12 +554,13 @@ pairs2sets <- function(pairs) {
 #' geno <- methods::new("SnpMatrix", mat)
 #' rownames(geno) <- paste0("S", 1:10)
 #' colnames(geno) <- paste0("SNP", 1:20)
-#' res <- doPCA(geno)
+#' res <- suppressWarnings(doPCA(geno))  # doPCA is deprecated; use runPCA()
 #' str(res)
 #' }
 #'
 #' @export
 doPCA <- function(genotypes) {
+  .Deprecated("runPCA")
   xxmat <- snpStats::xxt(genotypes, correct.for.missing = FALSE)
   evv <- eigen(xxmat, symmetric = TRUE)
   pcs <- evv$vectors
@@ -672,9 +707,12 @@ exploratory.plots <- function(snp.summary, snps.plot, sample.summary, samples.pl
 get.correl.fc <- function(g1, g2) {
   g1 <- as.raw(g1)
   g2 <- as.raw(g2)
+  # av marks positions called in both samples (non-zero). Because it already
+  # excludes zeros, the former `== 0` concordance term was always zero and is
+  # dropped here without changing the result.
   av <- as.logical(g1) & as.logical(g2)
   t1 <- sum(av)
-  t2 <- sum(g1[av] == 0 & g2[av] == 0) + sum(g1[av] == 1 & g2[av] == 1) + sum(g1[av] == 2 & g2[av] == 2)
+  t2 <- sum(g1[av] == 1 & g2[av] == 1) + sum(g1[av] == 2 & g2[av] == 2)
   return(ifelse(t1, t2 / t1, 0))
 }
 
